@@ -1,0 +1,14 @@
+[package]
+name = "todo-app"
+description = "A simple CLI TODO app"
+version = "0.1.0"
+edition = "2021"
+categories = ["utilities", "CLI"]
+license = "MIT OR Apache-2.0"
+authors = ["Agustin Mediotti <agustinmediotti@gmail.com>"]
+
+[workspace]
+members = ["model"]
+
+[dependencies]
+model = { path = "./model" }
