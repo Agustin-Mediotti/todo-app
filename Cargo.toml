@@ -12,3 +12,6 @@ members = ["model"]
 
 [dependencies]
 model = { path = "./model" }
+
+tui = { version = "0.19", default-features = false, features = ["crossterm"] }
+crossterm = "0.25"

@@ -1,26 +1,43 @@
-use std::error::Error;
+use std::{error::Error, io, thread, time::Duration};
 
-use model::common::Task;
+use crossterm::{
+    event::{DisableMouseCapture, EnableMouseCapture},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use todo_app::client::App;
+use tui::{
+    backend::CrosstermBackend,
+    widgets::{Block, Borders},
+    Terminal,
+};
 
 fn main() -> Result<(), Box<dyn Error>> {
+    enable_raw_mode()?;
+
     let mut app = App::new()?;
     app.clean_tasks()?;
 
-    let first_task = Task::new(app.index(), String::from("Rust The Book"))?;
-    let second_task = Task::new(app.index(), String::from("Rust Cookbook"))?;
-    let third_task = Task::new(app.index(), String::from("Rustonomicon"))?;
-    app.add_task(first_task)?;
-    app.add_task(second_task)?;
-    app.add_task(third_task)?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
 
-    print!("{}", app.show_tasks());
+    terminal.draw(|f| {
+        let size = f.size();
+        let block = Block::default().title("Tasks").borders(Borders::all());
+        f.render_widget(block, size);
+    })?;
 
-    app.change_task_text(0, "Rust is awesome!".to_string())?;
-    app.change_task_done(0)?;
+    thread::sleep(Duration::from_millis(5000));
 
-    print!("{}", app.show_tasks());
-    println!();
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
 
     Ok(())
 }
