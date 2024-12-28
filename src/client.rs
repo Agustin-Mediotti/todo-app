@@ -23,7 +23,6 @@ impl App {
                 //lectura
                 let mut task_vec = Vec::new();
                 for line in buf.lines() {
-                    dbg!("{}", line);
                     task_vec.push(Task::from_line(line)?);
                 }
                 Ok(App { tasks: task_vec })
