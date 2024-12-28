@@ -13,5 +13,6 @@ members = ["model"]
 [dependencies]
 model = { path = "./model" }
 
-tui = { version = "0.19", default-features = false, features = ["crossterm"] }
-crossterm = "0.25"
+ratatui = { version = "0.29.0", features = ["widget-calendar"] }
+crossterm = "0.28.1"
+color-eyre = "0.6.3"

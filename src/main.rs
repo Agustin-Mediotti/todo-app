@@ -1,59 +1,32 @@
-use std::{error::Error, io, thread, time::Duration};
-
-use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
+use color_eyre::{eyre::Ok, Result};
+use crossterm::event::{self, Event};
+use model::common::Task;
+use ratatui::DefaultTerminal;
 use todo_app::client::App;
-use tui::{
-    backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Direction, Layout},
-    widgets::{Block, Borders},
-    Frame, Terminal,
-};
 
-fn main() -> Result<(), Box<dyn Error>> {
-    enable_raw_mode()?;
+fn main() -> Result<()> {
+    color_eyre::install()?;
 
-    let mut app = App::new()?;
-    app.clean_tasks()?;
+    // TODO: Better error handling.
 
-    fn ui<B: Backend>(f: &mut Frame<B>) {
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .margin(1)
-            .constraints(
-                [
-                    Constraint::Percentage(10),
-                    Constraint::Percentage(80),
-                    Constraint::Percentage(10),
-                ]
-                .as_ref(),
-            )
-            .split(f.size());
-        let block = Block::default().title("Block").borders(Borders::ALL);
-        f.render_widget(block, chunks[0]);
-        let block = Block::default().title("Block 2").borders(Borders::ALL);
-        f.render_widget(block, chunks[1]);
+    let mut app: App = App::new().expect("error isntanciating App");
+    app.clean_tasks().expect("error cleaning tasks");
+    let task = Task::new(app.index(), "Rust The Book".to_string())?;
+    app.add_task(task).expect("error adding task");
+
+    let terminal = ratatui::init();
+    let result = run(terminal, app);
+    ratatui::restore();
+    result
+}
+
+fn run(mut terminal: DefaultTerminal, app: App) -> Result<()> {
+    loop {
+        terminal.draw(|frame| {
+            frame.render_widget(app.show_tasks(), frame.area());
+        })?;
+        if matches!(event::read()?, Event::Key(_)) {
+            break Ok(());
+        }
     }
-
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    terminal.draw(|f| ui(f))?;
-
-    thread::sleep(Duration::from_millis(5000));
-
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    Ok(())
 }
