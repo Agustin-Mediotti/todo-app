@@ -1,32 +1,25 @@
-use color_eyre::{eyre::Ok, Result};
-use crossterm::event::{self, Event};
 use model::common::Task;
-use ratatui::DefaultTerminal;
-use todo_app::client::App;
+use std::error::Error;
+use todo_app::app::App;
 
-fn main() -> Result<()> {
+pub mod app;
+
+fn main() -> color_eyre::Result<(), Box<dyn Error>> {
     color_eyre::install()?;
 
-    // TODO: Better error handling.
-
-    let mut app: App = App::new().expect("error isntanciating App");
-    app.clean_tasks().expect("error cleaning tasks");
-    let task = Task::new(app.index(), "Rust The Book".to_string())?;
-    app.add_task(task).expect("error adding task");
-
     let terminal = ratatui::init();
-    let result = run(terminal, app);
-    ratatui::restore();
-    result
-}
+    let mut app = App::new()?;
 
-fn run(mut terminal: DefaultTerminal, app: App) -> Result<()> {
-    loop {
-        terminal.draw(|frame| {
-            frame.render_widget(app.show_tasks(), frame.area());
-        })?;
-        if matches!(event::read()?, Event::Key(_)) {
-            break Ok(());
-        }
-    }
+    app.clean_tasks().expect("error cleaning tasks");
+    let task = Task::new(app.index(), "Analizar".to_string())?;
+    let task2 = Task::new(app.index(), "Leer".to_string())?;
+    let task3 = Task::new(app.index(), "Escuchar".to_string())?;
+    app.add_task(task).expect("error adding task");
+    app.add_task(task2).expect("error adding task");
+    app.add_task(task3).expect("error adding task");
+
+    app.change_task_done(1)?;
+    let result = app.run(terminal)?;
+    ratatui::restore();
+    Ok(result)
 }

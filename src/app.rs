@@ -1,11 +1,23 @@
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use model::{common::Task, util::is_completed};
+use ratatui::{
+    buffer::Buffer,
+    layout::Rect,
+    style::{Style, Stylize},
+    symbols::border,
+    text::{Line, Text},
+    widgets::{Block, List, StatefulWidget, Widget},
+    DefaultTerminal, Frame,
+};
 use std::{
     error::Error,
     fs::File,
-    io::{BufRead, BufReader, Read, Write},
+    io::{self, BufRead, BufReader, Read, Write},
 };
+#[derive(Debug, Default)]
 pub struct App {
     tasks: Vec<Task>,
+    running: bool,
 }
 
 impl App {
@@ -18,16 +30,58 @@ impl App {
         let mut buf = String::new();
         user_data.read_to_string(&mut buf)?;
         match buf.is_empty() {
-            true => Ok(App { tasks: Vec::new() }),
+            true => Ok(App {
+                tasks: Vec::new(),
+                running: true,
+            }),
             false => {
                 //lectura
                 let mut task_vec = Vec::new();
                 for line in buf.lines() {
                     task_vec.push(Task::from_line(line)?);
                 }
-                Ok(App { tasks: task_vec })
+                Ok(App {
+                    tasks: task_vec,
+                    running: true,
+                })
             }
         }
+    }
+
+    pub fn run(&mut self, mut terminal: DefaultTerminal) -> io::Result<()> {
+        while self.running {
+            terminal.draw(|frame| self.draw(frame))?;
+            self.handle_envents()?;
+        }
+        Ok(())
+    }
+
+    fn draw(&self, frame: &mut Frame) {
+        frame.render_widget(self, frame.area());
+    }
+
+    fn handle_envents(&mut self) -> io::Result<()> {
+        match event::read()? {
+            // it's important to check KeyEventKind::Press to avoid handling key release events
+            Event::Key(key) if key.kind == KeyEventKind::Press => self.on_key_event(key),
+            Event::Mouse(_) => {}
+            Event::Resize(_, _) => {}
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn on_key_event(&mut self, key: KeyEvent) {
+        match (key.modifiers, key.code) {
+            (_, KeyCode::Esc | KeyCode::Char('q'))
+            | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit(),
+            // Add other key handlers here.
+            _ => {}
+        }
+    }
+
+    fn quit(&mut self) {
+        self.running = false;
     }
 
     pub fn add_task(&mut self, mut task: Task) -> Result<(), Box<dyn Error>> {
@@ -44,11 +98,11 @@ impl App {
     }
 
     // TODO: Error handling
-    pub fn show_tasks(&self) -> String {
+    pub fn tasks_into_string(&self) -> String {
         let mut task_str = String::new();
         self.tasks.iter().for_each(|f| {
             task_str.push_str(&format!(
-                "> {} {} \n",
+                "{} {} \n",
                 f.description(),
                 is_completed(f.completed())
             ))
@@ -116,6 +170,28 @@ impl App {
     }
 }
 
+impl Widget for &App {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let list = List::new(
+            self.tasks
+                .iter()
+                .map(|task| {
+                    task.description().clone() + "\t" + is_completed(task.completed()).as_str()
+                })
+                .collect::<Vec<String>>(),
+        )
+        .block(
+            Block::bordered()
+                .title(Line::from(" Tasks ".bold()).centered())
+                .border_set(border::ROUNDED),
+        )
+        .highlight_style(Style::new().reversed())
+        .highlight_symbol(">>")
+        .repeat_highlight_symbol(true);
+        Widget::render(list, area, buf); // TODO: render with StatefulWidget
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,7 +234,7 @@ mod tests {
                 .expect("error creating new task"),
         )
         .expect("error while adding a new task");
-        assert_eq!(app.show_tasks(), "> Hello World [] \n")
+        assert_eq!(app.tasks_into_string(), "Hello World [] \n")
     }
 
     #[test]
@@ -171,7 +247,7 @@ mod tests {
         )
         .expect("error while adding a new task");
         app.remove_task(0).expect("error while removing task");
-        assert_eq!(app.show_tasks(), "")
+        assert_eq!(app.tasks_into_string(), "")
     }
 
     #[test]
@@ -183,6 +259,6 @@ mod tests {
         )
         .expect("error while adding a new task");
         app.clean_tasks().expect("error while removing all tasks");
-        assert_eq!(app.show_tasks(), "")
+        assert_eq!(app.tasks_into_string(), "")
     }
 }
