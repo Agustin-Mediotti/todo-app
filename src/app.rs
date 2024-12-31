@@ -5,8 +5,8 @@ use ratatui::{
     layout::Rect,
     style::{Style, Stylize},
     symbols::border,
-    text::{Line, Text},
-    widgets::{Block, List, StatefulWidget, Widget},
+    text::Line,
+    widgets::{Block, List, ListState, StatefulWidget, Widget},
     DefaultTerminal, Frame,
 };
 use std::{
@@ -18,6 +18,8 @@ use std::{
 pub struct App {
     tasks: Vec<Task>,
     running: bool,
+    state: ListState,
+    throbber_state: throbber_widgets_tui::ThrobberState,
 }
 
 impl App {
@@ -33,6 +35,8 @@ impl App {
             true => Ok(App {
                 tasks: Vec::new(),
                 running: true,
+                state: ListState::default(),
+                throbber_state: throbber_widgets_tui::ThrobberState::default(),
             }),
             false => {
                 //lectura
@@ -43,20 +47,37 @@ impl App {
                 Ok(App {
                     tasks: task_vec,
                     running: true,
+                    state: ListState::default(),
+                    throbber_state: throbber_widgets_tui::ThrobberState::default(),
                 })
             }
         }
     }
 
     pub fn run(&mut self, mut terminal: DefaultTerminal) -> io::Result<()> {
+        let tick_rate = std::time::Duration::from_millis(250);
+        let mut last_tick = std::time::Instant::now();
         while self.running {
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_envents()?;
+            let timeout = tick_rate
+                .checked_sub(last_tick.elapsed())
+                .unwrap_or_else(|| std::time::Duration::from_secs(0));
+            if ratatui::crossterm::event::poll(timeout)? {
+                self.handle_envents()?;
+            }
+            if last_tick.elapsed() >= tick_rate {
+                self.on_tick();
+                last_tick = std::time::Instant::now();
+            }
         }
         Ok(())
     }
 
-    fn draw(&self, frame: &mut Frame) {
+    fn on_tick(&mut self) {
+        self.throbber_state.calc_next();
+    }
+
+    fn draw(&mut self, frame: &mut Frame) {
         frame.render_widget(self, frame.area());
     }
 
@@ -75,7 +96,12 @@ impl App {
         match (key.modifiers, key.code) {
             (_, KeyCode::Esc | KeyCode::Char('q'))
             | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit(),
-            // Add other key handlers here.
+            (_, KeyCode::Up) => self.previous(),
+            (_, KeyCode::Down) => self.next(),
+            (_, KeyCode::Left) => self.unselect(),
+            (_, KeyCode::Enter) => self
+                .change_task_done(self.state.selected().unwrap())
+                .expect("error on done"),
             _ => {}
         }
     }
@@ -90,6 +116,7 @@ impl App {
         writeln!(file, "{}", task.to_line())?;
         file.flush()?; // ensures writing
         self.tasks.push(task);
+        self.state = ListState::default(); // reset state
         Ok(())
     }
 
@@ -146,7 +173,6 @@ impl App {
                 lines.pop();
             }
         }
-        // sobreescribir
         let mut file = File::create("user_data")?;
         for line in lines {
             writeln!(file, "{}", line)?;
@@ -168,15 +194,57 @@ impl App {
         self.remove_trailing_newline()?;
         Ok(())
     }
+
+    pub fn next(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i >= self.tasks.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn previous(&mut self) {
+        let i = match self.state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.tasks.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.state.select(Some(i));
+    }
+
+    pub fn unselect(&mut self) {
+        self.state.select(None);
+    }
 }
 
-impl Widget for &App {
+impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        let full = throbber_widgets_tui::Throbber::default()
+            .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
+            .throbber_style(
+                ratatui::style::Style::default()
+                    .fg(ratatui::style::Color::Red)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            )
+            .throbber_set(throbber_widgets_tui::BRAILLE_SIX)
+            .use_type(throbber_widgets_tui::WhichUse::Spin);
         let list = List::new(
+            // TODO: make it a List<Table> and add a Layout
             self.tasks
                 .iter()
                 .map(|task| {
-                    task.description().clone() + "\t" + is_completed(task.completed()).as_str()
+                    task.description().clone() + " " + is_completed(task.completed()).as_str()
                 })
                 .collect::<Vec<String>>(),
         )
@@ -186,9 +254,10 @@ impl Widget for &App {
                 .border_set(border::ROUNDED),
         )
         .highlight_style(Style::new().reversed())
-        .highlight_symbol(">>")
+        .highlight_symbol(">> ")
         .repeat_highlight_symbol(true);
-        Widget::render(list, area, buf); // TODO: render with StatefulWidget
+        StatefulWidget::render(list, area, buf, &mut self.state);
+        StatefulWidget::render(full, area, buf, &mut self.throbber_state);
     }
 }
 
