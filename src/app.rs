@@ -18,6 +18,7 @@ use std::{
 pub struct App {
     tasks: Vec<Task>,
     running: bool,
+    show_done: bool, // TODO: better data structure
     state: ListState,
     throbber_state: throbber_widgets_tui::ThrobberState,
 }
@@ -35,6 +36,7 @@ impl App {
             true => Ok(App {
                 tasks: Vec::new(),
                 running: true,
+                show_done: false,
                 state: ListState::default(),
                 throbber_state: throbber_widgets_tui::ThrobberState::default(),
             }),
@@ -46,6 +48,7 @@ impl App {
                 Ok(App {
                     tasks: task_vec,
                     running: true,
+                    show_done: false,
                     state: ListState::default(),
                     throbber_state: throbber_widgets_tui::ThrobberState::default(),
                 })
@@ -100,7 +103,10 @@ impl App {
             (_, KeyCode::Left) => self.unselect(),
             (_, KeyCode::Enter) => self
                 .change_task_done(self.state.selected().unwrap())
-                .expect("error on done"),
+                .unwrap_or_default(),
+            (KeyModifiers::CONTROL, KeyCode::Char('h') | KeyCode::Char('H')) => {
+                self.hide_done().unwrap_or_default()
+            }
             _ => {}
         }
     }
@@ -158,6 +164,11 @@ impl App {
     pub fn change_task_done(&mut self, index: usize) -> color_eyre::Result<()> {
         self.tasks[index].set_completed();
         self.save_to_file()?;
+        Ok(())
+    }
+
+    pub fn hide_done(&mut self) -> color_eyre::Result<()> {
+        self.show_done = !self.show_done;
         Ok(())
     }
 
@@ -238,23 +249,33 @@ impl Widget for &mut App {
             )
             .throbber_set(throbber_widgets_tui::BRAILLE_SIX)
             .use_type(throbber_widgets_tui::WhichUse::Spin);
-        let list = List::new(
-            // TODO: make it a List<Table> and add a Layout
+        let items: Vec<String> = if self.show_done {
             self.tasks
                 .iter()
                 .map(|task| {
                     task.description().clone() + " " + is_completed(task.completed()).as_str()
                 })
-                .collect::<Vec<String>>(),
-        )
-        .block(
-            Block::bordered()
-                .title(Line::from(" Tasks ".bold()).centered())
-                .border_set(border::ROUNDED),
-        )
-        .highlight_style(Style::new().reversed())
-        .highlight_symbol(">> ")
-        .repeat_highlight_symbol(true);
+                .collect::<Vec<String>>()
+        } else {
+            self.tasks
+                .iter()
+                .filter(|x| x.completed() == false)
+                .map(|task| {
+                    task.description().clone() + " " + is_completed(task.completed()).as_str()
+                })
+                .collect::<Vec<String>>()
+        };
+
+        let list = List::new(items)
+            .block(
+                Block::bordered()
+                    .title(Line::from(" Tasks ".bold()).centered())
+                    .border_set(border::ROUNDED),
+            )
+            .highlight_style(Style::new().reversed())
+            .highlight_symbol(">> ")
+            .repeat_highlight_symbol(true);
+
         StatefulWidget::render(list, area, buf, &mut self.state);
         StatefulWidget::render(full, area, buf, &mut self.throbber_state);
     }
@@ -321,6 +342,7 @@ mod tests {
     #[test]
     fn remove_all_tasks() {
         let mut app = App::new().expect("error instanciating app");
+        app.clean_tasks().expect("error while removing all tasks");
         app.add_task(
             Task::new(app.tasks.len(), String::from("Hello World"))
                 .expect("error creating new task"),

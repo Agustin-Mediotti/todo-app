@@ -52,7 +52,6 @@ impl Task {
                 });
             }
             false => {
-                dbg!("{}", parts.len());
                 return Err(TaskError::EmptyStringError);
             }
         }
