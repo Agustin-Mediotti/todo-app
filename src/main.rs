@@ -1,25 +1,26 @@
 use model::common::Task;
-use std::error::Error;
 use todo_app::app::App;
 
 pub mod app;
 
-fn main() -> color_eyre::Result<(), Box<dyn Error>> {
+fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let terminal = ratatui::init();
-    let mut app = App::new()?;
+    let mut app = App::new().unwrap_or_default();
 
-    app.clean_tasks().expect("error cleaning tasks");
+    app.clean_tasks()?;
     let task = Task::new(app.index(), "Analizar".to_string())?;
     let task2 = Task::new(app.index(), "Leer".to_string())?;
     let task3 = Task::new(app.index(), "Escuchar".to_string())?;
-    app.add_task(task).expect("error adding task");
-    app.add_task(task2).expect("error adding task");
-    app.add_task(task3).expect("error adding task");
+    app.add_task(task)?;
+    app.add_task(task2)?;
+    app.add_task(task3)?;
 
     app.change_task_done(1)?;
-    let result = app.run(terminal)?;
-    ratatui::restore();
-    Ok(result)
+    let result = app.run(terminal);
+    if let Err(err) = ratatui::try_restore() {
+        eprintln!("failed to restore terminal: {}", err);
+    }
+    result
 }

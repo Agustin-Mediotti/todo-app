@@ -12,7 +12,7 @@ use ratatui::{
 use std::{
     error::Error,
     fs::File,
-    io::{self, BufRead, BufReader, Read, Write},
+    io::{BufRead, BufReader, Read, Write},
 };
 #[derive(Debug, Default)]
 pub struct App {
@@ -39,7 +39,6 @@ impl App {
                 throbber_state: throbber_widgets_tui::ThrobberState::default(),
             }),
             false => {
-                //lectura
                 let mut task_vec = Vec::new();
                 for line in buf.lines() {
                     task_vec.push(Task::from_line(line)?);
@@ -54,7 +53,7 @@ impl App {
         }
     }
 
-    pub fn run(&mut self, mut terminal: DefaultTerminal) -> io::Result<()> {
+    pub fn run(&mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
         let tick_rate = std::time::Duration::from_millis(250);
         let mut last_tick = std::time::Instant::now();
         while self.running {
@@ -81,7 +80,7 @@ impl App {
         frame.render_widget(self, frame.area());
     }
 
-    fn handle_envents(&mut self) -> io::Result<()> {
+    fn handle_envents(&mut self) -> color_eyre::Result<()> {
         match event::read()? {
             // it's important to check KeyEventKind::Press to avoid handling key release events
             Event::Key(key) if key.kind == KeyEventKind::Press => self.on_key_event(key),
@@ -110,7 +109,7 @@ impl App {
         self.running = false;
     }
 
-    pub fn add_task(&mut self, mut task: Task) -> Result<(), Box<dyn Error>> {
+    pub fn add_task(&mut self, mut task: Task) -> color_eyre::Result<()> {
         let mut file = File::options().write(true).append(true).open("user_data")?;
         task.set_id(self.index());
         writeln!(file, "{}", task.to_line())?;
@@ -138,31 +137,31 @@ impl App {
     }
 
     // TODO: Error Handling
-    pub fn remove_task(&mut self, index: u32) -> Result<(), Box<dyn Error>> {
+    pub fn remove_task(&mut self, index: u32) -> color_eyre::Result<()> {
         self.tasks.remove(index as usize);
         self.save_to_file()?;
         Ok(())
     }
 
-    pub fn clean_tasks(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn clean_tasks(&mut self) -> color_eyre::Result<()> {
         self.tasks = Vec::new();
         File::create("user_data")?;
         Ok(())
     }
 
-    pub fn change_task_text(&mut self, index: usize, text: String) -> Result<(), Box<dyn Error>> {
+    pub fn change_task_text(&mut self, index: usize, text: String) -> color_eyre::Result<()> {
         self.tasks[index].change_text(text)?;
         self.save_to_file()?;
         Ok(())
     }
 
-    pub fn change_task_done(&mut self, index: usize) -> Result<(), Box<dyn Error>> {
+    pub fn change_task_done(&mut self, index: usize) -> color_eyre::Result<()> {
         self.tasks[index].set_completed();
         self.save_to_file()?;
         Ok(())
     }
 
-    pub fn remove_trailing_newline(&self) -> Result<(), Box<dyn Error>> {
+    pub fn remove_trailing_newline(&self) -> color_eyre::Result<()> {
         let file = File::options().read(true).write(true).open("user_data")?;
         let buf = BufReader::new(file);
 
@@ -180,7 +179,7 @@ impl App {
         Ok(())
     }
 
-    pub fn save_to_file(&self) -> Result<(), Box<dyn Error>> {
+    pub fn save_to_file(&self) -> color_eyre::Result<()> {
         let mut file = File::options().read(true).write(true).open("user_data")?;
         for line in &self.tasks {
             writeln!(
