@@ -6,7 +6,7 @@ use ratatui::{
     style::{Style, Stylize},
     symbols::border,
     text::Line,
-    widgets::{Block, List, ListState, StatefulWidget, Widget},
+    widgets::{Block, Borders, List, ListState, StatefulWidget, Widget},
     DefaultTerminal, Frame,
 };
 use std::{
@@ -266,11 +266,24 @@ impl Widget for &mut App {
                 .collect::<Vec<String>>()
         };
 
+        let instructions = Line::from(vec![
+            " Done ".into(),
+            "<Enter>".red().bold(),
+            " Show/Hide ".into(),
+            "<Ctrl + H>".red().bold(),
+            " Help ".into(),
+            "<Ctrl + ?>".red().bold(), // TODO: make a prompt displaying info
+            " Quit ".into(),
+            "<Q> ".red().bold(),
+        ]);
+
         let list = List::new(items)
             .block(
                 Block::bordered()
                     .title(Line::from(" Tasks ".bold()).centered())
-                    .border_set(border::ROUNDED),
+                    .border_set(border::ROUNDED)
+                    .title_bottom(instructions.centered())
+                    .borders(Borders::ALL),
             )
             .highlight_style(Style::new().reversed())
             .highlight_symbol(">> ")
