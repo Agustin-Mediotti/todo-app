@@ -2,6 +2,7 @@ use model::common::Task;
 use todo_app::app::App;
 
 pub mod app;
+pub mod ui;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;

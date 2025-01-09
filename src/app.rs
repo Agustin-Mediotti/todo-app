@@ -1,19 +1,13 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use model::{common::Task, util::is_completed};
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::{Style, Stylize},
-    symbols::border,
-    text::Line,
-    widgets::{Block, Borders, List, ListState, StatefulWidget, Widget},
-    DefaultTerminal, Frame,
-};
+use ratatui::{widgets::ListState, DefaultTerminal};
 use std::{
     error::Error,
     fs::File,
     io::{BufRead, BufReader, Read, Write},
 };
+
+use crate::ui::render;
 
 #[derive(Debug, Default, PartialEq)]
 pub enum CurrentScreen {
@@ -25,11 +19,11 @@ pub enum CurrentScreen {
 
 #[derive(Debug, Default)]
 pub struct App {
-    tasks: Vec<Task>,
-    current_screen: CurrentScreen,
-    show_done: bool, // TODO: better data structure
-    state: ListState,
-    throbber_state: throbber_widgets_tui::ThrobberState,
+    pub tasks: Vec<Task>,
+    pub current_screen: CurrentScreen,
+    pub show_done: bool, // TODO: better data structure
+    pub state: ListState,
+    pub throbber_state: throbber_widgets_tui::ThrobberState,
 }
 
 impl App {
@@ -57,7 +51,7 @@ impl App {
         let tick_rate = std::time::Duration::from_millis(250);
         let mut last_tick = std::time::Instant::now();
         while self.current_screen != CurrentScreen::Exiting {
-            terminal.draw(|frame| self.draw(frame))?;
+            terminal.draw(|frame| render(self, frame))?;
             let timeout = tick_rate
                 .checked_sub(last_tick.elapsed())
                 .unwrap_or_else(|| std::time::Duration::from_secs(0));
@@ -74,10 +68,6 @@ impl App {
 
     fn on_tick(&mut self) {
         self.throbber_state.calc_next();
-    }
-
-    fn draw(&mut self, frame: &mut Frame) {
-        frame.render_widget(self, frame.area());
     }
 
     fn handle_envents(&mut self) -> color_eyre::Result<()> {
@@ -239,62 +229,6 @@ impl App {
 
     pub fn unselect(&mut self) {
         self.state.select(None);
-    }
-}
-
-impl Widget for &mut App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let full = throbber_widgets_tui::Throbber::default()
-            .style(ratatui::style::Style::default().fg(ratatui::style::Color::Yellow))
-            .throbber_style(
-                ratatui::style::Style::default()
-                    .fg(ratatui::style::Color::Red)
-                    .add_modifier(ratatui::style::Modifier::BOLD),
-            )
-            .throbber_set(throbber_widgets_tui::BRAILLE_SIX)
-            .use_type(throbber_widgets_tui::WhichUse::Spin);
-        let items: Vec<String> = if self.show_done {
-            self.tasks
-                .iter()
-                .map(|task| {
-                    task.description().clone() + " " + is_completed(task.completed()).as_str()
-                })
-                .collect::<Vec<String>>()
-        } else {
-            self.tasks
-                .iter()
-                .filter(|x| x.completed() == false)
-                .map(|task| {
-                    task.description().clone() + " " + is_completed(task.completed()).as_str()
-                })
-                .collect::<Vec<String>>()
-        };
-
-        let instructions = Line::from(vec![
-            " Done ".into(),
-            "<Enter>".red().bold(),
-            " Show/Hide ".into(),
-            "<Ctrl + H>".red().bold(),
-            " Help ".into(),
-            "<Ctrl + ?>".red().bold(), // TODO: make a prompt displaying info
-            " Quit ".into(),
-            "<Q> ".red().bold(),
-        ]);
-
-        let list = List::new(items)
-            .block(
-                Block::bordered()
-                    .title(Line::from(" Tasks ".bold()).centered())
-                    .border_set(border::ROUNDED)
-                    .title_bottom(instructions.centered())
-                    .borders(Borders::ALL),
-            )
-            .highlight_style(Style::new().reversed())
-            .highlight_symbol(">> ")
-            .repeat_highlight_symbol(true);
-
-        StatefulWidget::render(list, area, buf, &mut self.state);
-        StatefulWidget::render(full, area, buf, &mut self.throbber_state);
     }
 }
 
