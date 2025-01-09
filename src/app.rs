@@ -14,10 +14,19 @@ use std::{
     fs::File,
     io::{BufRead, BufReader, Read, Write},
 };
+
+#[derive(Debug, Default, PartialEq)]
+pub enum CurrentScreen {
+    #[default]
+    Main,
+    Editing,
+    Exiting,
+}
+
 #[derive(Debug, Default)]
 pub struct App {
     tasks: Vec<Task>,
-    running: bool,
+    current_screen: CurrentScreen,
     show_done: bool, // TODO: better data structure
     state: ListState,
     throbber_state: throbber_widgets_tui::ThrobberState,
@@ -33,25 +42,13 @@ impl App {
         let mut buf = String::new();
         user_data.read_to_string(&mut buf)?;
         match buf.is_empty() {
-            true => Ok(App {
-                tasks: Vec::new(),
-                running: true,
-                show_done: false,
-                state: ListState::default(),
-                throbber_state: throbber_widgets_tui::ThrobberState::default(),
-            }),
+            true => Ok(App::default()),
             false => {
                 let mut task_vec = Vec::new();
                 for line in buf.lines() {
                     task_vec.push(Task::from_line(line)?);
                 }
-                Ok(App {
-                    tasks: task_vec,
-                    running: true,
-                    show_done: false,
-                    state: ListState::default(),
-                    throbber_state: throbber_widgets_tui::ThrobberState::default(),
-                })
+                Ok(App::default())
             }
         }
     }
@@ -59,7 +56,7 @@ impl App {
     pub fn run(&mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
         let tick_rate = std::time::Duration::from_millis(250);
         let mut last_tick = std::time::Instant::now();
-        while self.running {
+        while self.current_screen != CurrentScreen::Exiting {
             terminal.draw(|frame| self.draw(frame))?;
             let timeout = tick_rate
                 .checked_sub(last_tick.elapsed())
@@ -95,24 +92,31 @@ impl App {
     }
 
     fn on_key_event(&mut self, key: KeyEvent) {
-        match (key.modifiers, key.code) {
-            (_, KeyCode::Esc | KeyCode::Char('q'))
-            | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit(),
-            (_, KeyCode::Up) => self.previous(),
-            (_, KeyCode::Down) => self.next(),
-            (_, KeyCode::Left) => self.unselect(),
-            (_, KeyCode::Enter) => self
-                .change_task_done(self.state.selected().unwrap())
-                .unwrap_or_default(),
-            (KeyModifiers::CONTROL, KeyCode::Char('h') | KeyCode::Char('H')) => {
-                self.hide_done().unwrap_or_default()
-            }
-            _ => {}
+        match self.current_screen {
+            CurrentScreen::Main => match (key.modifiers, key.code) {
+                (_, KeyCode::Esc | KeyCode::Char('q'))
+                | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit(),
+                (_, KeyCode::Up) => self.previous(),
+                (_, KeyCode::Down) => self.next(),
+                (_, KeyCode::Left) => self.unselect(),
+                (_, KeyCode::Enter) => self
+                    .change_task_done(self.state.selected().unwrap())
+                    .unwrap_or_default(),
+                (KeyModifiers::CONTROL, KeyCode::Char('h') | KeyCode::Char('H')) => {
+                    self.hide_done().unwrap_or_default()
+                }
+                _ => {}
+            },
+            CurrentScreen::Editing => {}
+            CurrentScreen::Exiting => match (key.modifiers, key.code) {
+                (_, KeyCode::Char('q')) => self.quit(),
+                _ => {}
+            },
         }
     }
 
     fn quit(&mut self) {
-        self.running = false;
+        self.current_screen = CurrentScreen::Exiting;
     }
 
     pub fn add_task(&mut self, mut task: Task) -> color_eyre::Result<()> {
