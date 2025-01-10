@@ -1,6 +1,6 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use model::{common::Task, util::is_completed};
-use ratatui::{widgets::ListState, DefaultTerminal};
+use ratatui::{prelude::Backend, widgets::ListState, Terminal};
 use std::{
     error::Error,
     fs::File,
@@ -22,7 +22,9 @@ pub enum CurrentScreen {
 pub struct App {
     pub tasks: Vec<Task>,
     pub current_screen: CurrentScreen,
+    pub quit: bool,
     pub show_done: bool, // TODO: better data structure
+    pub loading: bool,
     pub state: ListState,
     pub throbber_state: throbber_widgets_tui::ThrobberState,
 }
@@ -48,10 +50,10 @@ impl App {
         }
     }
 
-    pub fn run(&mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
+    pub fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> color_eyre::Result<()> {
         let tick_rate = std::time::Duration::from_millis(250);
         let mut last_tick = std::time::Instant::now();
-        while self.current_screen != CurrentScreen::Exiting {
+        while !self.quit {
             terminal.draw(|frame| render(self, frame))?;
             let timeout = tick_rate
                 .checked_sub(last_tick.elapsed())
@@ -99,6 +101,7 @@ impl App {
                 (_, KeyCode::Char('h') | KeyCode::Char('H')) => {
                     self.current_screen = CurrentScreen::Help
                 }
+                (_, KeyCode::Char('l')) => self.loading(),
                 _ => {}
             },
             CurrentScreen::Editing => {}
@@ -110,7 +113,10 @@ impl App {
                 _ => {}
             },
             CurrentScreen::Exiting => match (key.modifiers, key.code) {
-                (_, KeyCode::Char('q')) => self.quit(),
+                (_, KeyCode::Char('q')) | (_, KeyCode::Char('y')) => self.quit = true,
+                (_, KeyCode::Char('n')) | (_, KeyCode::Esc) => {
+                    self.current_screen = CurrentScreen::Main
+                }
                 _ => {}
             },
         }
@@ -118,6 +124,10 @@ impl App {
 
     fn quit(&mut self) {
         self.current_screen = CurrentScreen::Exiting;
+    }
+
+    fn loading(&mut self) {
+        self.loading = !self.loading;
     }
 
     pub fn add_task(&mut self, mut task: Task) -> color_eyre::Result<()> {
