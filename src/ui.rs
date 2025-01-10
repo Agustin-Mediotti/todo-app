@@ -5,7 +5,7 @@ use ratatui::layout::{Constraint, Direction, Flex, Layout, Rect};
 use ratatui::prelude::Stylize;
 use ratatui::style::{Color, Style};
 use ratatui::symbols::{self, border};
-use ratatui::text::{Line, Text};
+use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, Clear, List, Paragraph, Wrap};
 use ratatui::Frame;
 
@@ -92,18 +92,24 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     frame.render_stateful_widget(list, chunks[1], &mut app.state);
 
+    let nick = vec![
+        Span::styled(" 🦀 by ", Style::default()),
+        Span::styled("N37CR347UR3", Style::default()),
+        Span::styled(" - 2025 ", Style::default()),
+    ];
+
     if let CurrentScreen::Help = app.current_screen {
         let popup_block = Block::default()
-            .borders(Borders::ALL)
-            .border_set(symbols::border::DOUBLE)
+            .borders(Borders::BOTTOM)
+            .border_set(symbols::border::PLAIN)
             .style(Style::default())
-            .title_bottom(" Made in 🦀 by Vitto 2025 ")
+            .title_bottom(nick)
             .title_style(Style::default().fg(Color::Gray))
             .title_alignment(ratatui::layout::Alignment::Center);
 
         let banner_text = Text::raw(BANNER)
             .centered()
-            .style(Style::default().fg(Color::Gray));
+            .style(Style::default().fg(Color::Yellow));
 
         let help_paragraph = Paragraph::new(banner_text.clone())
             .block(popup_block)
