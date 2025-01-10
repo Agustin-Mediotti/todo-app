@@ -14,6 +14,7 @@ pub enum CurrentScreen {
     #[default]
     Main,
     Editing,
+    Help,
     Exiting,
 }
 
@@ -92,12 +93,22 @@ impl App {
                 (_, KeyCode::Enter) => self
                     .change_task_done(self.state.selected().unwrap())
                     .unwrap_or_default(),
-                (KeyModifiers::CONTROL, KeyCode::Char('h') | KeyCode::Char('H')) => {
+                (_, KeyCode::Char('w') | KeyCode::Char('W')) => {
                     self.hide_done().unwrap_or_default()
+                }
+                (_, KeyCode::Char('h') | KeyCode::Char('H')) => {
+                    self.current_screen = CurrentScreen::Help
                 }
                 _ => {}
             },
             CurrentScreen::Editing => {}
+            CurrentScreen::Help => match (key.modifiers, key.code) {
+                (_, KeyCode::Esc | KeyCode::Char('q'))
+                | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => {
+                    self.current_screen = CurrentScreen::Main
+                }
+                _ => {}
+            },
             CurrentScreen::Exiting => match (key.modifiers, key.code) {
                 (_, KeyCode::Char('q')) => self.quit(),
                 _ => {}
