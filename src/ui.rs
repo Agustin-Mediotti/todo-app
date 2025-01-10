@@ -122,8 +122,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     if let CurrentScreen::Exiting = app.current_screen {
         let popup_block = Block::default()
             .title("Y/N")
-            .borders(Borders::NONE)
-            .style(Style::default().bg(Color::DarkGray));
+            .borders(Borders::ALL)
+            .border_set(symbols::border::ROUNDED)
+            .style(Style::default());
 
         let exit_text = Text::styled(
             "Are you sure you want to exit?",
