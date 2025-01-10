@@ -19,57 +19,6 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         ])
         .split(frame.area());
 
-    if let CurrentScreen::Help = app.current_screen {
-        let popup_block = Block::default()
-            .borders(Borders::ALL)
-            .border_set(symbols::border::DOUBLE)
-            .style(Style::default())
-            .title_bottom(" Made in 🦀 by Vitto 2025 ")
-            .title_style(Style::default().fg(Color::Gray))
-            .title_alignment(ratatui::layout::Alignment::Center);
-
-        let banner_text = Text::raw(BANNER)
-            .centered()
-            .style(Style::default().fg(Color::Gray));
-
-        let help_paragraph = Paragraph::new(banner_text.clone())
-            .block(popup_block)
-            .wrap(Wrap { trim: false })
-            .centered();
-
-        let area = center(
-            frame.area(),
-            Constraint::Length(banner_text.width() as u16 + 3),
-            Constraint::Length(banner_text.height() as u16 + 2),
-        );
-        frame.render_widget(Clear, area);
-        frame.render_widget(help_paragraph, area);
-    }
-
-    if let CurrentScreen::Exiting = app.current_screen {
-        let popup_block = Block::default()
-            .title("Y/N")
-            .borders(Borders::NONE)
-            .style(Style::default().bg(Color::DarkGray));
-
-        let exit_text = Text::styled(
-            "Are you sure you want to exit?",
-            Style::default().fg(Color::Red),
-        );
-
-        let exit_paragraph = Paragraph::new(exit_text.clone())
-            .block(popup_block)
-            .wrap(Wrap { trim: false });
-
-        let area = center(
-            frame.area(),
-            Constraint::Percentage(30),
-            Constraint::Percentage(10),
-        );
-        frame.render_widget(Clear, area);
-        frame.render_widget(exit_paragraph, area);
-    }
-
     let throbber_widget = throbber_widgets_tui::Throbber::default()
         .throbber_style(
             ratatui::style::Style::default()
@@ -142,6 +91,57 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .repeat_highlight_symbol(true);
 
     frame.render_stateful_widget(list, chunks[1], &mut app.state);
+
+    if let CurrentScreen::Help = app.current_screen {
+        let popup_block = Block::default()
+            .borders(Borders::ALL)
+            .border_set(symbols::border::DOUBLE)
+            .style(Style::default())
+            .title_bottom(" Made in 🦀 by Vitto 2025 ")
+            .title_style(Style::default().fg(Color::Gray))
+            .title_alignment(ratatui::layout::Alignment::Center);
+
+        let banner_text = Text::raw(BANNER)
+            .centered()
+            .style(Style::default().fg(Color::Gray));
+
+        let help_paragraph = Paragraph::new(banner_text.clone())
+            .block(popup_block)
+            .wrap(Wrap { trim: false })
+            .centered();
+
+        let area = center(
+            frame.area(),
+            Constraint::Length(banner_text.width() as u16 + 3),
+            Constraint::Length(banner_text.height() as u16 + 2),
+        );
+        frame.render_widget(Clear, frame.area());
+        frame.render_widget(help_paragraph, area);
+    }
+
+    if let CurrentScreen::Exiting = app.current_screen {
+        let popup_block = Block::default()
+            .title("Y/N")
+            .borders(Borders::NONE)
+            .style(Style::default().bg(Color::DarkGray));
+
+        let exit_text = Text::styled(
+            "Are you sure you want to exit?",
+            Style::default().fg(Color::Red),
+        );
+
+        let exit_paragraph = Paragraph::new(exit_text.clone())
+            .block(popup_block)
+            .wrap(Wrap { trim: false });
+
+        let area = center(
+            frame.area(),
+            Constraint::Percentage(30),
+            Constraint::Percentage(10),
+        );
+        frame.render_widget(Clear, frame.area());
+        frame.render_widget(exit_paragraph, area);
+    }
 }
 
 pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
