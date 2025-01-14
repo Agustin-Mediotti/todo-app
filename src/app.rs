@@ -3,8 +3,9 @@ use model::{common::Task, util::is_completed};
 use ratatui::{prelude::Backend, widgets::ListState, Terminal};
 use std::{
     error::Error,
-    fs::File,
+    fs::{self, File},
     io::{BufRead, BufReader, Read, Write},
+    path::Path,
 };
 
 use crate::ui::render;
@@ -27,6 +28,8 @@ pub struct App {
     pub loading: bool,
     pub state: ListState,
     pub throbber_state: throbber_widgets_tui::ThrobberState,
+    pub path: String,
+    pub with_json: bool,
 }
 
 impl App {
@@ -45,7 +48,34 @@ impl App {
                 for line in buf.lines() {
                     task_vec.push(Task::from_line(line)?);
                 }
-                Ok(App::default())
+                Ok(App {
+                    tasks: task_vec,
+                    ..Default::default()
+                })
+            }
+        }
+    }
+
+    pub fn with_json(path: &str) -> Result<App, Box<dyn Error>> {
+        let file = Path::new(path);
+        match !file.exists() {
+            true => {
+                fs::File::create(path)?;
+                Ok(App {
+                    tasks: Vec::new(),
+                    path: path.to_owned(),
+                    with_json: true,
+                    ..Default::default()
+                })
+            }
+            false => {
+                let buf = Self::read_from_json(path)?;
+                Ok(App {
+                    tasks: buf,
+                    path: path.to_owned(),
+                    with_json: true,
+                    ..Default::default()
+                })
             }
         }
     }
@@ -131,17 +161,35 @@ impl App {
     }
 
     pub fn add_task(&mut self, mut task: Task) -> color_eyre::Result<()> {
-        let mut file = File::options().write(true).append(true).open("user_data")?;
-        task.set_id(self.index());
-        writeln!(file, "{}", task.to_line())?;
-        file.flush()?; // ensures writing
-        self.tasks.push(task);
-        self.state = ListState::default(); // reset state
+        if self.with_json {
+            task.set_id(self.index());
+            self.write_to_json(&self.path)?;
+            self.tasks.push(task);
+            self.state = ListState::default(); // reset state
+        } else {
+            let mut file = File::options().write(true).append(true).open("user_data")?;
+            task.set_id(self.index());
+            writeln!(file, "{}", task.to_line())?;
+            file.flush()?; // ensures writing
+            self.tasks.push(task);
+            self.state = ListState::default(); // reset state
+        }
         Ok(())
     }
 
     pub fn index(&self) -> usize {
         self.tasks.len()
+    }
+
+    pub fn read_from_json(path: &str) -> std::io::Result<Vec<Task>> {
+        let content = fs::read_to_string(path)?;
+        let tasks: Vec<Task> = serde_json::from_str(&content)?;
+        Ok(tasks)
+    }
+
+    pub fn write_to_json(&self, path: &str) -> std::io::Result<()> {
+        let content = serde_json::to_string_pretty(&self.tasks)?;
+        fs::write(path, content)
     }
 
     // TODO: Error handling
@@ -166,7 +214,12 @@ impl App {
 
     pub fn clean_tasks(&mut self) -> color_eyre::Result<()> {
         self.tasks = Vec::new();
-        File::create("user_data")?;
+        if self.with_json {
+            self.write_to_json(&self.path)?;
+        } else {
+            File::create("user_data")?;
+        }
+
         Ok(())
     }
 
@@ -206,17 +259,21 @@ impl App {
     }
 
     pub fn save_to_file(&self) -> color_eyre::Result<()> {
-        let mut file = File::options().read(true).write(true).open("user_data")?;
-        for line in &self.tasks {
-            writeln!(
-                file,
-                "{},{},{}",
-                line.get_id(),
-                line.description(),
-                line.completed()
-            )?;
+        if self.with_json {
+            self.write_to_json(&self.path)?;
+        } else {
+            let mut file = File::options().read(true).write(true).open("user_data")?;
+            for line in &self.tasks {
+                writeln!(
+                    file,
+                    "{},{},{}",
+                    line.get_id(),
+                    line.description(),
+                    line.completed()
+                )?;
+            }
+            self.remove_trailing_newline()?;
         }
-        self.remove_trailing_newline()?;
         Ok(())
     }
 

@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
 
@@ -18,7 +19,7 @@ impl fmt::Display for TaskError {
 // And this is required to use the `?` operator.
 impl Error for TaskError {}
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Task {
     id: usize,
     description: String,

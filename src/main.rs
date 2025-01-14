@@ -22,7 +22,7 @@ fn main() -> color_eyre::Result<()> {
 
     let backend = CrosstermBackend::new(stderr);
     let mut terminal = Terminal::new(backend)?;
-    let mut app = App::new().unwrap_or_default();
+    let mut app = App::with_json("data.json").unwrap_or_default();
 
     app.clean_tasks()?;
     let task = Task::new(app.index(), "Rustonomicon".to_string())?;
