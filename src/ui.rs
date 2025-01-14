@@ -164,24 +164,27 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     if let CurrentScreen::Exiting = app.current_screen {
         let popup_block = Block::default()
-            .title("Y/N")
+            .title_bottom(Line::from(" Y/N ").right_aligned().fg(Color::LightYellow))
             .borders(Borders::ALL)
             .border_set(symbols::border::ROUNDED)
-            .style(Style::default());
+            .style(Style::default())
+            .padding(Padding::vertical(2));
 
         let exit_text = Text::styled(
             "Are you sure you want to exit?",
-            Style::default().fg(Color::Red),
-        );
+            Style::default().bold().fg(Color::Red),
+        )
+        .alignment(ratatui::layout::Alignment::Center);
 
         let exit_paragraph = Paragraph::new(exit_text.clone())
             .block(popup_block)
+            .centered()
             .wrap(Wrap { trim: false });
 
         let area = center(
             frame.area(),
-            Constraint::Percentage(30),
-            Constraint::Percentage(10),
+            Constraint::Length(exit_text.width() as u16 + 4),
+            Constraint::Length(exit_text.height() as u16 + 6),
         );
         frame.render_widget(Clear, frame.area());
         frame.render_widget(exit_paragraph, area);
