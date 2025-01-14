@@ -30,6 +30,8 @@ pub struct App {
     pub throbber_state: throbber_widgets_tui::ThrobberState,
     pub path: String,
     pub with_json: bool,
+    pub body_input: String,
+    pub editing: bool,
 }
 
 impl App {
@@ -50,6 +52,7 @@ impl App {
                 }
                 Ok(App {
                     tasks: task_vec,
+                    state: ListState::default().with_selected(Some(0)),
                     ..Default::default()
                 })
             }
@@ -74,6 +77,7 @@ impl App {
                     tasks: buf,
                     path: path.to_owned(),
                     with_json: true,
+                    state: ListState::default().with_selected(Some(0)),
                     ..Default::default()
                 })
             }
@@ -118,13 +122,18 @@ impl App {
         match self.current_screen {
             CurrentScreen::Main => match (key.modifiers, key.code) {
                 (_, KeyCode::Esc | KeyCode::Char('q'))
-                | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit(),
+                | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => {
+                    self.current_screen = CurrentScreen::Exiting
+                }
                 (_, KeyCode::Up) => self.previous(),
                 (_, KeyCode::Down) => self.next(),
                 (_, KeyCode::Left) => self.unselect(),
-                (_, KeyCode::Enter) => self
-                    .change_task_done(self.state.selected().unwrap())
-                    .unwrap_or_default(),
+                (_, KeyCode::Enter) => {
+                    self.current_screen = CurrentScreen::Editing;
+                    self.editing = true;
+                    self.body_input
+                        .push_str(&self.tasks[self.state.selected().unwrap()].body());
+                }
                 (_, KeyCode::Char('w') | KeyCode::Char('W')) => {
                     self.hide_done().unwrap_or_default()
                 }
@@ -134,11 +143,42 @@ impl App {
                 (_, KeyCode::Char('l')) => self.loading(),
                 _ => {}
             },
-            CurrentScreen::Editing => {}
+            CurrentScreen::Editing => match (key.modifiers, key.code) {
+                (_, KeyCode::Enter) => {
+                    self.current_screen = CurrentScreen::Main;
+                    self.editing = false;
+                    self.save_to_file().unwrap();
+                    self.tasks[self.state.selected().unwrap()].set_body(self.body_input.clone());
+                    self.body_input = String::new();
+                }
+                (_, KeyCode::Esc) => {
+                    self.current_screen = CurrentScreen::Main;
+                    self.editing = false;
+                    self.body_input = String::new();
+                }
+                (_, KeyCode::Tab) => self
+                    .change_task_done(self.state.selected().unwrap())
+                    .unwrap(),
+                (_, KeyCode::Backspace) => {
+                    if !self.body_input.is_empty() {
+                        self.body_input.pop();
+                    }
+                }
+                (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => {
+                    self.current_screen = CurrentScreen::Exiting;
+                    self.editing = false;
+                }
+                (_, KeyCode::Char(value)) => {
+                    if self.editing {
+                        self.body_input.push(value);
+                    }
+                }
+                _ => {}
+            },
             CurrentScreen::Help => match (key.modifiers, key.code) {
-                (_, KeyCode::Esc | KeyCode::Char('q'))
-                | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => {
-                    self.current_screen = CurrentScreen::Main
+                (_, KeyCode::Esc | KeyCode::Char('q')) => self.current_screen = CurrentScreen::Main,
+                (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => {
+                    self.current_screen = CurrentScreen::Exiting
                 }
                 _ => {}
             },
@@ -152,10 +192,6 @@ impl App {
         }
     }
 
-    fn quit(&mut self) {
-        self.current_screen = CurrentScreen::Exiting;
-    }
-
     fn loading(&mut self) {
         self.loading = !self.loading;
     }
@@ -164,16 +200,14 @@ impl App {
         if self.with_json {
             task.set_id(self.index());
             self.write_to_json(&self.path)?;
-            self.tasks.push(task);
-            self.state = ListState::default(); // reset state
         } else {
             let mut file = File::options().write(true).append(true).open("user_data")?;
             task.set_id(self.index());
             writeln!(file, "{}", task.to_line())?;
             file.flush()?; // ensures writing
-            self.tasks.push(task);
-            self.state = ListState::default(); // reset state
         }
+        self.tasks.push(task);
+        self.state.select(Some(0)); // reset state
         Ok(())
     }
 
@@ -197,9 +231,10 @@ impl App {
         let mut task_str = String::new();
         self.tasks.iter().for_each(|f| {
             task_str.push_str(&format!(
-                "{} {} \n",
+                "{} {} {} \n",
                 f.description(),
-                is_completed(f.completed())
+                is_completed(f.completed()),
+                f.body()
             ))
         });
         task_str
@@ -320,8 +355,12 @@ mod tests {
         app.clean_tasks().expect("error while removing all tasks");
         assert_eq!(
             app.add_task(
-                Task::new(app.tasks.len(), String::from("Hello World"))
-                    .expect("error creating new task")
+                Task::new(
+                    app.tasks.len(),
+                    String::from("Hello World"),
+                    String::from("hello world")
+                )
+                .expect("error creating new task")
             )
             .unwrap(),
             ()
@@ -330,14 +369,16 @@ mod tests {
 
     #[test]
     fn set_is_done() {
-        let mut task = Task::new(0, String::from("Hello World")).expect("error creating new task");
+        let mut task = Task::new(0, String::from("Hello World"), String::from("hello world"))
+            .expect("error creating new task");
         task.set_completed();
         assert_eq!(task.completed(), true);
     }
 
     #[test]
     fn change_valid_text() {
-        let mut task = Task::new(0, String::from("Hello World")).expect("error creating new task");
+        let mut task = Task::new(0, String::from("Hello World"), String::from("hello world"))
+            .expect("error creating new task");
         task.change_text(String::from("New Text"))
             .expect("text is empty");
         assert_eq!(task.description(), String::from("New Text"));
@@ -348,8 +389,12 @@ mod tests {
         let mut app = App::new().expect("error instanciating app");
         app.clean_tasks().expect("error while removing all tasks");
         app.add_task(
-            Task::new(app.tasks.len(), String::from("Hello World"))
-                .expect("error creating new task"),
+            Task::new(
+                app.tasks.len(),
+                String::from("Hello World"),
+                String::from("hello world"),
+            )
+            .expect("error creating new task"),
         )
         .expect("error while adding a new task");
         assert_eq!(app.tasks_into_string(), "Hello World [] \n")
@@ -360,8 +405,12 @@ mod tests {
         let mut app = App::new().expect("error instanciating app");
         app.clean_tasks().expect("error while removing all tasks");
         app.add_task(
-            Task::new(app.tasks.len(), String::from("Hello World"))
-                .expect("error creating new task"),
+            Task::new(
+                app.tasks.len(),
+                String::from("Hello World"),
+                String::from("hello world"),
+            )
+            .expect("error creating new task"),
         )
         .expect("error while adding a new task");
         app.remove_task(0).expect("error while removing task");
@@ -373,8 +422,12 @@ mod tests {
         let mut app = App::new().expect("error instanciating app");
         app.clean_tasks().expect("error while removing all tasks");
         app.add_task(
-            Task::new(app.tasks.len(), String::from("Hello World"))
-                .expect("error creating new task"),
+            Task::new(
+                app.tasks.len(),
+                String::from("Hello World"),
+                String::from("hello world"),
+            )
+            .expect("error creating new task"),
         )
         .expect("error while adding a new task");
         app.clean_tasks().expect("error while removing all tasks");

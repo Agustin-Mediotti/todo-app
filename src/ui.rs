@@ -6,7 +6,7 @@ use ratatui::prelude::Stylize;
 use ratatui::style::{Color, Style};
 use ratatui::symbols::{self, border};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Block, Borders, Clear, List, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Clear, List, Padding, Paragraph, Wrap};
 use ratatui::Frame;
 
 pub fn render(app: &mut App, frame: &mut Frame) {
@@ -35,20 +35,28 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let items: Vec<String> = if app.show_done {
         app.tasks
             .iter()
-            .map(|task| task.description().clone() + " " + is_completed(task.completed()).as_str())
+            .map(|task| {
+                is_completed(task.completed()).as_str().to_owned()
+                    + " "
+                    + task.description().as_str()
+            })
             .collect::<Vec<String>>()
     } else {
         app.tasks
             .iter()
             .filter(|x| x.completed() == false)
-            .map(|task| task.description().clone() + " " + is_completed(task.completed()).as_str())
+            .map(|task| {
+                is_completed(task.completed()).as_str().to_owned()
+                    + " "
+                    + task.description().as_str()
+            })
             .collect::<Vec<String>>()
     };
 
     let footer_text = {
         match app.current_screen {
             CurrentScreen::Main => Paragraph::new(Line::from(vec![
-                " Done ".into(),
+                " Select ".into(),
                 "<Enter>".red().bold(),
                 " Show/Hide ".into(),
                 "<W>".red().bold(),
@@ -58,12 +66,12 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 "<Q> ".red().bold(),
             ])),
             CurrentScreen::Editing => Paragraph::new(Line::from(vec![
-                " Done ".into(),
-                "<Enter>".red().bold(),
-                " About ".into(),
-                "<H>".red().bold(),
-                " Quit ".into(),
-                "<Q> ".red().bold(),
+                " Done Editing ".into(),
+                "<Enter> ".red().bold(),
+                " Mark as Done ".into(),
+                "<Tab>".red().bold(),
+                " Back ".into(),
+                "<Esc> ".red().bold(),
             ])),
             CurrentScreen::Help => {
                 Paragraph::new(Line::from(vec!["Back ".into(), "<Q> ".red().bold()]))
@@ -82,13 +90,13 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let list = List::new(items)
         .block(
             Block::bordered()
-                .title(Line::from(" Tasks ".bold()).left_aligned())
                 .border_set(border::ROUNDED)
                 .borders(Borders::ALL),
         )
         .highlight_style(Style::new().reversed())
         .highlight_symbol(">> ")
-        .repeat_highlight_symbol(true);
+        .repeat_highlight_symbol(true)
+        .highlight_spacing(ratatui::widgets::HighlightSpacing::WhenSelected);
 
     frame.render_stateful_widget(list, chunks[1], &mut app.state);
 
@@ -121,8 +129,37 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             Constraint::Length(banner_text.width() as u16 + 3),
             Constraint::Length(banner_text.height() as u16 + 2),
         );
-        frame.render_widget(Clear, frame.area());
         frame.render_widget(help_paragraph, area);
+    }
+
+    if let CurrentScreen::Editing = app.current_screen {
+        let popup_block = Block::default()
+            .title(" ".to_owned() + &app.tasks[app.state.selected().unwrap()].description() + " ")
+            .title_style(Style::default().fg(Color::LightYellow))
+            .borders(Borders::ALL)
+            .border_set(symbols::border::ROUNDED)
+            .style(Style::default())
+            .padding(Padding::horizontal(2));
+
+        let wrapped_lines = wrap_text(&app.body_input, ((frame.area().width * 50) / 100) as usize);
+        let text_height = wrapped_lines.len() as u16 + 2;
+
+        let wrapped_text = wrapped_lines
+            .into_iter()
+            .map(|line| Line::from(Span::raw(line)))
+            .collect::<Vec<_>>();
+
+        let area = center(
+            frame.area(),
+            Constraint::Percentage(50),
+            Constraint::Length(text_height),
+        );
+
+        let editing_text = Paragraph::new(wrapped_text)
+            .block(popup_block)
+            .left_aligned();
+
+        frame.render_widget(editing_text, area);
     }
 
     if let CurrentScreen::Exiting = app.current_screen {
@@ -150,31 +187,29 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         frame.render_widget(exit_paragraph, area);
     }
 }
-
-pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage((100 - percent_y) / 2),
-            Constraint::Percentage(percent_y),
-            Constraint::Percentage((100 - percent_y) / 2),
-        ])
-        .split(r);
-
-    Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage((100 - percent_x) / 2),
-            Constraint::Percentage(percent_x),
-            Constraint::Percentage((100 - percent_x) / 2),
-        ])
-        .split(popup_layout[1])[1]
-}
-
 fn center(area: Rect, horizontal: Constraint, vertical: Constraint) -> Rect {
     let [area] = Layout::horizontal([horizontal])
         .flex(Flex::Center)
         .areas(area);
     let [area] = Layout::vertical([vertical]).flex(Flex::Center).areas(area);
     area
+}
+
+fn wrap_text(input: &str, max_width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
+
+    for ch in input.chars() {
+        if current_line.len() + 1 > max_width {
+            lines.push(current_line);
+            current_line = String::new();
+        }
+        current_line.push(ch);
+    }
+
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
+
+    lines
 }

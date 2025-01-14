@@ -24,16 +24,18 @@ pub struct Task {
     id: usize,
     description: String,
     completed: bool,
+    body: String,
 }
 
 impl Task {
-    pub fn new(id: usize, str: String) -> Result<Task, TaskError> {
-        if str.is_empty() {
+    pub fn new(id: usize, description: String, body: String) -> Result<Task, TaskError> {
+        if description.is_empty() {
             return Err(TaskError::EmptyStringError);
         }
         Ok(Task {
             id,
-            description: str,
+            description,
+            body,
             completed: false,
         })
     }
@@ -44,12 +46,13 @@ impl Task {
 
     pub fn from_line(line: &str) -> Result<Task, TaskError> {
         let parts: Vec<&str> = line.rsplit(",").collect();
-        match parts.len() == 3 {
+        match parts.len() == 4 {
             true => {
                 return Ok(Task {
-                    id: parts[2].parse::<usize>().unwrap(),
-                    description: parts[1].parse::<String>().unwrap(),
-                    completed: parts[0].parse::<bool>().unwrap(),
+                    id: parts[3].parse::<usize>().unwrap(),
+                    description: parts[2].parse::<String>().unwrap(),
+                    completed: parts[1].parse::<bool>().unwrap(),
+                    body: parts[0].parse::<String>().unwrap(),
                 });
             }
             false => {
@@ -72,6 +75,14 @@ impl Task {
 
     pub fn description(&self) -> String {
         self.description.clone()
+    }
+
+    pub fn body(&self) -> String {
+        self.body.clone()
+    }
+
+    pub fn set_body(&mut self, body: String) {
+        self.body = body;
     }
 
     pub fn set_completed(&mut self) {
