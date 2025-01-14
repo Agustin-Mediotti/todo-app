@@ -1,7 +1,7 @@
 use crate::app::{App, CurrentScreen};
 use crate::banner::BANNER;
 use model::util::is_completed;
-use ratatui::layout::{Constraint, Direction, Flex, Layout, Rect};
+use ratatui::layout::{Constraint, Direction, Flex, Layout, Position, Rect};
 use ratatui::prelude::Stylize;
 use ratatui::style::{Color, Style};
 use ratatui::symbols::{self, border};
@@ -132,6 +132,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         frame.render_widget(help_paragraph, area);
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     if let CurrentScreen::Editing = app.current_screen {
         let popup_block = Block::default()
             .title(" ".to_owned() + &app.tasks[app.state.selected().unwrap()].description() + " ")
@@ -141,7 +142,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             .style(Style::default())
             .padding(Padding::horizontal(2));
 
-        let wrapped_lines = wrap_text(&app.body_input, ((frame.area().width * 50) / 100) as usize);
+        let popup_width = ((frame.area().width * 50) / 100) as usize;
+
+        let wrapped_lines = wrap_text(&app.body_input, popup_width);
         let text_height = wrapped_lines.len() as u16 + 2;
 
         let wrapped_text = wrapped_lines
@@ -151,9 +154,17 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
         let area = center(
             frame.area(),
-            Constraint::Percentage(50),
+            Constraint::Percentage(55),
             Constraint::Length(text_height),
         );
+
+        let index_x = app.character_index % popup_width;
+        let index_y = app.character_index / popup_width;
+
+        frame.set_cursor_position(Position::new(
+            area.x + index_x as u16 + 3,
+            area.y + index_y as u16 + 1,
+        ));
 
         let editing_text = Paragraph::new(wrapped_text)
             .block(popup_block)
