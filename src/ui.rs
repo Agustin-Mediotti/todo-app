@@ -19,6 +19,26 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         ])
         .split(frame.area());
 
+    let content_chunk = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
+        .split(chunks[1]);
+
+    let info_block = Block::bordered()
+        .border_set(symbols::border::ROUNDED)
+        .title_bottom(format!(" {} ", env!("CARGO_PKG_VERSION")))
+        .title_alignment(ratatui::layout::Alignment::Right);
+
+    let info_text = Paragraph::new(
+        Text::from("Thank you for using Tasks!")
+            .bold()
+            .style(Style::default()),
+    )
+    .block(info_block)
+    .centered();
+
+    frame.render_widget(info_text, content_chunk[1]);
+
     let throbber_widget = throbber_widgets_tui::Throbber::default()
         .throbber_style(
             ratatui::style::Style::default()
@@ -94,16 +114,16 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 .borders(Borders::ALL),
         )
         .highlight_style(Style::new().reversed())
-        .highlight_symbol(">> ")
+        .highlight_symbol(" >> ")
         .repeat_highlight_symbol(true)
         .highlight_spacing(ratatui::widgets::HighlightSpacing::WhenSelected);
 
-    frame.render_stateful_widget(list, chunks[1], &mut app.state);
+    frame.render_stateful_widget(list, content_chunk[0], &mut app.state);
 
     let nick = vec![
         Span::styled(" 🦀 by ", Style::default()),
-        Span::styled("N37CR347UR3", Style::default()),
-        Span::styled(" - 2025 ", Style::default()),
+        Span::styled("N37CR347UR3 |", Style::default()),
+        Span::styled(format!(" {} ", env!("CARGO_PKG_LICENSE")), Style::default()),
     ];
 
     if let CurrentScreen::Help = app.current_screen {

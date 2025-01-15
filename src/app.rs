@@ -128,7 +128,6 @@ impl App {
                 }
                 (_, KeyCode::Up) => self.previous(),
                 (_, KeyCode::Down) => self.next(),
-                (_, KeyCode::Left) => self.unselect(),
                 (_, KeyCode::Enter) => {
                     self.current_screen = CurrentScreen::Editing;
                     self.editing = true;
@@ -136,6 +135,7 @@ impl App {
                         .push_str(&self.tasks[self.state.selected().unwrap()].body());
                     self.character_index = self.body_input.chars().count();
                 }
+                (_, KeyCode::Tab) => self.tasks[self.state.selected().unwrap()].set_completed(),
                 (_, KeyCode::Char('w') | KeyCode::Char('W')) => {
                     self.hide_done().unwrap_or_default()
                 }
