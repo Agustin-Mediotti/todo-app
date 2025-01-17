@@ -1,5 +1,6 @@
 # todo-cli
-[![Build Status](https://github.com/Agustin-Mediotti/todo-app/workflows/Rust/badge.svg?branch=master)](https://github.com/Agustin-Mediotti/todo-app/actions?query=branch%3Amaster)
+[![Continuous Integration](https://github.com/Agustin-Mediotti/todo-app/workflows/Continuous%20Integration/badge.svg)](https://github.com/Agustin-Mediotti/todo-app/actions)
+[![License](https://img.shields.io/github/license/Agustin-Mediotti/todo-app)](https://github.com/Agustin-Mediotti/todo-app/blob/master/LICENSE)
 
 A simple TODO app for the terminal written in Rust. This project is designed to help you organize your tasks efficiently through a command-line interface.
 
