@@ -393,13 +393,15 @@ impl App {
 mod tests {
     use super::*;
 
-    fn tests_cleanup() {
-        fs::remove_file("user_data").expect("Failed to remove test file");
+    fn tests_cleanup(path: String) {
+        if Path::new(&path).exists() {
+            fs::remove_file(path).expect("Failed to remove test file");
+        }
     }
 
     #[test]
     fn add_correct_task() {
-        tests_cleanup();
+        tests_cleanup("user_data".to_owned());
         let mut app = App::new().expect("error instanciating app");
         app.clean_tasks().expect("error while removing all tasks");
         assert_eq!(
@@ -435,7 +437,7 @@ mod tests {
 
     #[test]
     fn display_tasks() {
-        tests_cleanup();
+        tests_cleanup("user_data".to_owned());
         let mut app = App::new().expect("error instanciating app");
         app.clean_tasks().expect("error while removing all tasks");
         app.add_task(
@@ -452,7 +454,7 @@ mod tests {
 
     #[test]
     fn remove_task() {
-        tests_cleanup();
+        tests_cleanup("user_data".to_owned());
         let mut app = App::new().expect("error instanciating app");
         app.clean_tasks().expect("error while removing all tasks");
         app.add_task(
@@ -470,7 +472,7 @@ mod tests {
 
     #[test]
     fn remove_all_tasks() {
-        tests_cleanup();
+        tests_cleanup("user_data".to_owned());
         let mut app = App::new().expect("error instanciating app");
         app.clean_tasks().expect("error while removing all tasks");
         app.add_task(
