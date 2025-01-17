@@ -76,8 +76,10 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let footer_text = {
         match app.current_screen {
             CurrentScreen::Main => Paragraph::new(Line::from(vec![
-                " Select ".into(),
+                " Edit ".into(),
                 "<Enter>".red().bold(),
+                " Mark as Done ".into(),
+                "<Tab>".red().bold(),
                 " Show/Hide ".into(),
                 "<W>".red().bold(),
                 " About ".into(),
