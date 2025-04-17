@@ -1,9 +1,9 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use model::{common::Task, util::get_data_path, util::is_completed};
+use model::{common::Task, util::is_completed};
 use ratatui::{prelude::Backend, widgets::ListState, Terminal};
 use std::{
     error::Error,
-    fs::{self, File},
+    fs::{self, create_dir_all, File},
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
 };
@@ -37,7 +37,7 @@ pub struct App {
     pub loading: bool,
     pub state: ListState,
     pub throbber_state: throbber_widgets_tui::ThrobberState,
-    pub path: String,
+    pub path: PathBuf,
     pub path_bin: PathBuf,
     pub with_json: bool,
     pub buffer: String,
@@ -46,37 +46,50 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Result<App, Box<dyn Error>> {
-        let bin_data = get_data_path("user_data").expect("Could not get data directory");
+    pub fn new(path: PathBuf) -> Result<App, Box<dyn Error>> {
+        if let Some(parent) = path.parent() {
+            if let Err(e) = create_dir_all(parent) {
+                eprintln!("Error creating directory {:?}: {}", parent, e);
+                std::process::exit(1);
+            }
+        }
+
         let mut user_data = File::options()
             .read(true)
             .append(true)
             .create(true)
-            .open(&bin_data)?;
+            .open(&path)?;
+
         let mut buf = String::new();
         user_data.read_to_string(&mut buf)?;
-        match buf.is_empty() {
-            true => Ok(App::default()),
-            false => {
-                let mut task_vec = Vec::new();
-                for line in buf.lines() {
-                    task_vec.push(Task::from_line(line)?);
-                }
-                Ok(App {
-                    tasks: task_vec,
-                    state: ListState::default().with_selected(Some(0)),
-                    path_bin: bin_data,
-                    ..Default::default()
-                })
-            }
-        }
+
+        let tasks = if buf.is_empty() {
+            Vec::new()
+        } else {
+            buf.lines().map(Task::from_line).collect::<Result<_, _>>()?
+        };
+
+        Ok(App {
+            tasks,
+            state: ListState::default().with_selected(Some(0)),
+            path_bin: path,
+            ..Default::default()
+        })
     }
 
-    pub fn with_json(path: &str) -> Result<App, Box<dyn Error>> {
-        let file = Path::new(path);
+    pub fn with_json(path: PathBuf) -> Result<App, Box<dyn Error>> {
+        let file = Path::new(path.as_path());
+
+        if let Some(parent) = path.parent() {
+            if let Err(e) = create_dir_all(parent) {
+                eprintln!("Error creating directory {:?}: {}", parent, e);
+                std::process::exit(1);
+            }
+        }
+
         match !file.exists() {
             true => {
-                fs::File::create(path)?;
+                fs::File::create(path.clone())?;
                 Ok(App {
                     tasks: Vec::new(),
                     path: path.to_owned(),
@@ -85,7 +98,7 @@ impl App {
                 })
             }
             false => {
-                let buf = Self::read_from_json(path)?;
+                let buf = Self::read_from_json(path.clone())?;
                 Ok(App {
                     tasks: buf,
                     path: path.to_owned(),
@@ -276,7 +289,7 @@ impl App {
     pub fn add_task(&mut self, mut task: Task) -> color_eyre::Result<()> {
         if self.with_json {
             task.set_id(self.index());
-            self.write_to_json(&self.path)?;
+            self.write_to_json(self.path.clone())?;
         } else {
             let mut file = File::options()
                 .write(true)
@@ -335,13 +348,13 @@ impl App {
         }
     }
 
-    pub fn read_from_json(path: &str) -> std::io::Result<Vec<Task>> {
+    pub fn read_from_json(path: PathBuf) -> std::io::Result<Vec<Task>> {
         let content = fs::read_to_string(path)?;
         let tasks: Vec<Task> = serde_json::from_str(&content)?;
         Ok(tasks)
     }
 
-    pub fn write_to_json(&self, path: &str) -> std::io::Result<()> {
+    pub fn write_to_json(&self, path: PathBuf) -> std::io::Result<()> {
         let content = serde_json::to_string_pretty(&self.tasks)?;
         fs::write(path, content)
     }
@@ -368,10 +381,13 @@ impl App {
     }
 
     pub fn clean_tasks(&mut self) -> color_eyre::Result<()> {
-        self.tasks = Vec::new();
+        self.tasks.clear();
         if self.with_json {
-            self.write_to_json(&self.path)?;
+            self.write_to_json(self.path.clone())?;
         } else {
+            if let Some(parent) = self.path_bin.parent() {
+                fs::create_dir_all(parent)?;
+            }
             File::create(&self.path_bin)?;
         }
 
@@ -400,7 +416,10 @@ impl App {
     }
 
     pub fn remove_trailing_newline(&self) -> color_eyre::Result<()> {
-        let file = File::options().read(true).write(true).open("user_data")?;
+        let file = File::options()
+            .read(true)
+            .write(true)
+            .open(&self.path_bin)?;
         let buf = BufReader::new(file);
 
         let mut lines: Vec<String> = buf.lines().filter_map(|line| line.ok()).collect();
@@ -419,7 +438,7 @@ impl App {
 
     pub fn save_to_file(&self) -> color_eyre::Result<()> {
         if self.with_json {
-            self.write_to_json(&self.path)?;
+            self.write_to_json(self.path.clone())?;
         } else {
             let mut file = File::options()
                 .read(true)

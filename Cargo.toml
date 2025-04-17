@@ -24,3 +24,6 @@ dirs = "6.0.0"
 [[bin]]
 name = "todo-app"
 path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = "3.19.1"
