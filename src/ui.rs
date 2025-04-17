@@ -76,10 +76,14 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     let footer_text = {
         match app.current_screen {
             CurrentScreen::Main => Paragraph::new(Line::from(vec![
+                " New Entry ".into(),
+                "<N>".red().bold(),
                 " Edit ".into(),
                 "<Enter>".red().bold(),
                 " Mark as Done ".into(),
                 "<Tab>".red().bold(),
+                " Delete ".into(),
+                "<Del>".red().bold(),
                 " Show/Hide ".into(),
                 "<W>".red().bold(),
                 " About ".into(),
@@ -90,7 +94,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             CurrentScreen::Editing => Paragraph::new(Line::from(vec![
                 " Done Editing ".into(),
                 "<Enter> ".red().bold(),
-                " Mark as Done ".into(),
+                " Description/Body ".into(),
                 "<Tab>".red().bold(),
                 " Back ".into(),
                 "<Esc> ".red().bold(),
@@ -104,6 +108,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                 " Quit ".into(),
                 "<Q/Y> ".red().bold(),
             ])),
+            CurrentScreen::Deleting => {
+                Paragraph::new(Line::from(vec![" Delete ".into(), "<Y/N>".red().bold()]))
+            }
         }
     };
 
@@ -156,8 +163,15 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
     #[allow(clippy::cast_possible_truncation)]
     if let CurrentScreen::Editing = app.current_screen {
+        let title = match &app.current_editing {
+            crate::app::CurrentEditing::Description => " ".to_owned() + &app.buffer + " ",
+            crate::app::CurrentEditing::Body => {
+                " ".to_owned() + &app.tasks[app.state.selected().unwrap()].description() + " "
+            }
+        };
+
         let popup_block = Block::default()
-            .title(" ".to_owned() + &app.tasks[app.state.selected().unwrap()].description() + " ")
+            .title(title)
             .title_style(Style::default().fg(Color::LightYellow))
             .borders(Borders::ALL)
             .border_set(symbols::border::ROUNDED)
@@ -166,7 +180,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
         let popup_width = ((frame.area().width * 50) / 100) as usize;
 
-        let wrapped_lines = wrap_text(&app.body_input, popup_width);
+        let wrapped_lines = wrap_text(&app.buffer, popup_width);
         let text_height = wrapped_lines.len() as u16 + 2;
 
         let wrapped_text = wrapped_lines
@@ -193,6 +207,31 @@ pub fn render(app: &mut App, frame: &mut Frame) {
             .left_aligned();
 
         frame.render_widget(editing_text, area);
+    }
+
+    if let CurrentScreen::Deleting = app.current_screen {
+        let popup_block = Block::default()
+            .title_bottom(Line::from(" Y/N ").right_aligned().fg(Color::LightYellow))
+            .borders(Borders::ALL)
+            .border_set(symbols::border::ROUNDED)
+            .style(Style::default())
+            .padding(Padding::vertical(2));
+
+        let exit_text = Text::styled("Delete entry?", Style::default().bold().fg(Color::Red))
+            .alignment(ratatui::layout::Alignment::Center);
+
+        let exit_paragraph = Paragraph::new(exit_text.clone())
+            .block(popup_block)
+            .centered()
+            .wrap(Wrap { trim: false });
+
+        let area = center(
+            frame.area(),
+            Constraint::Length(exit_text.width() as u16 + 4),
+            Constraint::Length(exit_text.height() as u16 + 6),
+        );
+        frame.render_widget(Clear, frame.area());
+        frame.render_widget(exit_paragraph, area);
     }
 
     if let CurrentScreen::Exiting = app.current_screen {

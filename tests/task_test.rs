@@ -12,7 +12,6 @@ fn set_is_done() {
 fn change_valid_text() {
     let mut task = Task::new(0, String::from("Hello World"), String::from("hello world"))
         .expect("error creating new task");
-    task.change_text(String::from("New Text"))
-        .expect("text is empty");
+    task.set_description(String::from("New Text"));
     assert_eq!(task.description(), String::from("New Text"));
 }

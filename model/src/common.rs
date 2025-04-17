@@ -19,7 +19,7 @@ impl fmt::Display for TaskError {
 // And this is required to use the `?` operator.
 impl Error for TaskError {}
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Task {
     id: usize,
     description: String,
@@ -37,6 +37,13 @@ impl Task {
             description,
             body,
             completed: false,
+        })
+    }
+
+    pub fn from_description(input: &str) -> Result<Task, TaskError> {
+        Ok(Task {
+            description: input.to_owned(),
+            ..Default::default()
         })
     }
 
@@ -89,13 +96,7 @@ impl Task {
         self.completed = !self.completed;
     }
 
-    pub fn change_text(&mut self, text: String) -> Result<(), TaskError> {
-        match text.is_empty() {
-            true => return Err(TaskError::EmptyStringError),
-            false => {
-                self.description = text;
-                Ok(())
-            }
-        }
+    pub fn set_description(&mut self, input: String) {
+        self.description = input;
     }
 }

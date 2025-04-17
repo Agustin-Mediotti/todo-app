@@ -1,20 +1,28 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use model::{common::Task, util::is_completed};
+use model::{common::Task, util::get_data_path, util::is_completed};
 use ratatui::{prelude::Backend, widgets::ListState, Terminal};
 use std::{
     error::Error,
     fs::{self, File},
     io::{BufRead, BufReader, Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use crate::ui::render;
+
+#[derive(Debug, Default, PartialEq)]
+pub enum CurrentEditing {
+    #[default]
+    Description,
+    Body,
+}
 
 #[derive(Debug, Default, PartialEq)]
 pub enum CurrentScreen {
     #[default]
     Main,
     Editing,
+    Deleting,
     Help,
     Exiting,
 }
@@ -23,25 +31,28 @@ pub enum CurrentScreen {
 pub struct App {
     pub tasks: Vec<Task>,
     pub current_screen: CurrentScreen,
+    pub current_editing: CurrentEditing,
     pub quit: bool,
     pub show_done: bool, // TODO: better data structure
     pub loading: bool,
     pub state: ListState,
     pub throbber_state: throbber_widgets_tui::ThrobberState,
     pub path: String,
+    pub path_bin: PathBuf,
     pub with_json: bool,
-    pub body_input: String,
+    pub buffer: String,
     pub editing: bool,
     pub character_index: usize,
 }
 
 impl App {
     pub fn new() -> Result<App, Box<dyn Error>> {
+        let bin_data = get_data_path("user_data").expect("Could not get data directory");
         let mut user_data = File::options()
             .read(true)
             .append(true)
             .create(true)
-            .open("user_data")?;
+            .open(&bin_data)?;
         let mut buf = String::new();
         user_data.read_to_string(&mut buf)?;
         match buf.is_empty() {
@@ -54,6 +65,7 @@ impl App {
                 Ok(App {
                     tasks: task_vec,
                     state: ListState::default().with_selected(Some(0)),
+                    path_bin: bin_data,
                     ..Default::default()
                 })
             }
@@ -129,13 +141,36 @@ impl App {
                 (_, KeyCode::Up) => self.previous(),
                 (_, KeyCode::Down) => self.next(),
                 (_, KeyCode::Enter) => {
+                    // TODO: Check if there are notes to edit. BUG!!
                     self.current_screen = CurrentScreen::Editing;
                     self.editing = true;
-                    self.body_input
-                        .push_str(&self.tasks[self.state.selected().unwrap()].body());
-                    self.character_index = self.body_input.chars().count();
+                    match self.current_editing {
+                        CurrentEditing::Description => self
+                            .buffer
+                            .push_str(&self.tasks[self.state.selected().unwrap()].description()),
+                        CurrentEditing::Body => self
+                            .buffer
+                            .push_str(&self.tasks[self.state.selected().unwrap()].body()),
+                    }
+                    self.character_index = self.buffer.chars().count();
                 }
-                (_, KeyCode::Tab) => self.tasks[self.state.selected().unwrap()].set_completed(),
+                (_, KeyCode::Tab) => {
+                    self.change_task_done(self.state.selected().unwrap())
+                        .unwrap();
+                    self.save_to_file().unwrap();
+                }
+                (_, KeyCode::Char('n') | KeyCode::Char('N')) => {
+                    self.current_screen = CurrentScreen::Editing;
+                    self.editing = true;
+                    self.buffer.push_str("Type something...");
+                    self.character_index = self.buffer.chars().count();
+                    self.add_task(Task::from_description(&self.buffer).unwrap())
+                        .unwrap_or_default();
+                    self.state.select_last();
+                }
+                (_, KeyCode::Delete) => {
+                    self.current_screen = CurrentScreen::Deleting;
+                }
                 (_, KeyCode::Char('w') | KeyCode::Char('W')) => {
                     self.hide_done().unwrap_or_default()
                 }
@@ -149,22 +184,49 @@ impl App {
                 (_, KeyCode::Enter) => {
                     self.current_screen = CurrentScreen::Main;
                     self.editing = false;
+                    match self.current_editing {
+                        CurrentEditing::Description => self.tasks[self.state.selected().unwrap()]
+                            .set_description(self.buffer.clone()),
+                        CurrentEditing::Body => {
+                            self.tasks[self.state.selected().unwrap()].set_body(self.buffer.clone())
+                        }
+                    }
+                    self.buffer.clear();
                     self.save_to_file().unwrap();
-                    self.tasks[self.state.selected().unwrap()].set_body(self.body_input.clone());
-                    self.body_input = String::new();
                 }
                 (_, KeyCode::Left) => self.move_cursor_left(),
                 (_, KeyCode::Right) => self.move_cursor_right(),
                 (_, KeyCode::Esc) => {
                     self.current_screen = CurrentScreen::Main;
                     self.editing = false;
-                    self.body_input = String::new();
+                    self.buffer.clear();
                 }
-                (_, KeyCode::Tab) => self
-                    .change_task_done(self.state.selected().unwrap())
-                    .unwrap(),
+                (_, KeyCode::Tab) => {
+                    match self.current_editing {
+                        CurrentEditing::Description => {
+                            self.current_editing = CurrentEditing::Body;
+                            self.tasks[self.state.selected().unwrap()]
+                                .set_description(self.buffer.clone());
+                            self.buffer.clear();
+                            self.buffer
+                                .push_str(&self.tasks[self.state.selected().unwrap()].body());
+                            self.character_index = self.buffer.chars().count();
+                        }
+                        CurrentEditing::Body => {
+                            self.current_editing = CurrentEditing::Description;
+                            self.tasks[self.state.selected().unwrap()]
+                                .set_body(self.buffer.clone());
+                            self.buffer.clear();
+                            self.buffer.push_str(
+                                &self.tasks[self.state.selected().unwrap()].description(),
+                            );
+                            self.character_index = self.buffer.chars().count();
+                        }
+                    }
+                    self.save_to_file().unwrap();
+                }
                 (_, KeyCode::Backspace) => {
-                    if !self.body_input.is_empty() {
+                    if !self.buffer.is_empty() {
                         self.delete_char();
                     }
                 }
@@ -193,6 +255,17 @@ impl App {
                 }
                 _ => {}
             },
+            CurrentScreen::Deleting => match (key.modifiers, key.code) {
+                (_, KeyCode::Char('y') | KeyCode::Char('Y')) => {
+                    self.remove_task(self.state.selected().unwrap())
+                        .unwrap_or_default();
+                    self.current_screen = CurrentScreen::Main;
+                }
+                (_, KeyCode::Char('n') | KeyCode::Char('N')) => {
+                    self.current_screen = CurrentScreen::Main
+                }
+                _ => {}
+            },
         }
     }
 
@@ -205,7 +278,10 @@ impl App {
             task.set_id(self.index());
             self.write_to_json(&self.path)?;
         } else {
-            let mut file = File::options().write(true).append(true).open("user_data")?;
+            let mut file = File::options()
+                .write(true)
+                .append(true)
+                .open(&self.path_bin)?;
             task.set_id(self.index());
             writeln!(file, "{}", task.to_line())?;
             file.flush()?; // ensures writing
@@ -231,20 +307,20 @@ impl App {
 
     pub fn enter_char(&mut self, new_char: char) {
         let index = self.byte_index();
-        self.body_input.insert(index, new_char);
+        self.buffer.insert(index, new_char);
         self.move_cursor_right();
     }
 
     pub fn byte_index(&self) -> usize {
-        self.body_input
+        self.buffer
             .char_indices()
             .map(|(i, _)| i)
             .nth(self.character_index)
-            .unwrap_or(self.body_input.len())
+            .unwrap_or(self.buffer.len())
     }
 
     fn clamp_cursor(&self, new_cursor_pos: usize) -> usize {
-        new_cursor_pos.clamp(0, self.body_input.chars().count())
+        new_cursor_pos.clamp(0, self.buffer.chars().count())
     }
 
     fn delete_char(&mut self) {
@@ -252,9 +328,9 @@ impl App {
         if is_not_cursor_leftmost {
             let current_index = self.character_index;
             let from_left_to_current_index = current_index - 1;
-            let before_char_to_delete = self.body_input.chars().take(from_left_to_current_index);
-            let after_char_to_delete = self.body_input.chars().skip(current_index);
-            self.body_input = before_char_to_delete.chain(after_char_to_delete).collect();
+            let before_char_to_delete = self.buffer.chars().take(from_left_to_current_index);
+            let after_char_to_delete = self.buffer.chars().skip(current_index);
+            self.buffer = before_char_to_delete.chain(after_char_to_delete).collect();
             self.move_cursor_left();
         }
     }
@@ -285,8 +361,8 @@ impl App {
     }
 
     // TODO: Error Handling
-    pub fn remove_task(&mut self, index: u32) -> color_eyre::Result<()> {
-        self.tasks.remove(index as usize);
+    pub fn remove_task(&mut self, index: usize) -> color_eyre::Result<()> {
+        self.tasks.remove(index);
         self.save_to_file()?;
         Ok(())
     }
@@ -296,14 +372,18 @@ impl App {
         if self.with_json {
             self.write_to_json(&self.path)?;
         } else {
-            File::create("user_data")?;
+            File::create(&self.path_bin)?;
         }
 
         Ok(())
     }
 
-    pub fn change_task_text(&mut self, index: usize, text: String) -> color_eyre::Result<()> {
-        self.tasks[index].change_text(text)?;
+    pub fn change_task_description(
+        &mut self,
+        index: usize,
+        text: String,
+    ) -> color_eyre::Result<()> {
+        self.tasks[index].set_description(text);
         self.save_to_file()?;
         Ok(())
     }
@@ -330,7 +410,7 @@ impl App {
                 lines.pop();
             }
         }
-        let mut file = File::create("user_data")?;
+        let mut file = File::create(&self.path_bin)?;
         for line in lines {
             writeln!(file, "{}", line)?;
         }
@@ -341,7 +421,10 @@ impl App {
         if self.with_json {
             self.write_to_json(&self.path)?;
         } else {
-            let mut file = File::options().read(true).write(true).open("user_data")?;
+            let mut file = File::options()
+                .read(true)
+                .write(true)
+                .open(&self.path_bin)?;
             for line in &self.tasks {
                 writeln!(
                     file,
