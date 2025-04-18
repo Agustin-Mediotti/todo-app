@@ -1,11 +1,13 @@
 [package]
 name = "todo-app"
-description = "A simple CLI TODO app"
-version = "0.1.2-alpha"
-edition = "2021"
-categories = ["utilities", "CLI"]
-license = "MIT"
+description = "A simple yet powerfull CLI TODO app written in Rust"
 authors = ["Agustin Mediotti <agustinmediotti@gmail.com>"]
+categories = ["utilities", "CLI"]
+edition = "2021"
+version = "0.1.4-alpha"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Agustin-Mediotti/todo-app/"
 
 [workspace]
 members = ["model"]

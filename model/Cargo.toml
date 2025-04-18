@@ -1,7 +1,6 @@
 [package]
 name = "model"
 description = "data model crate"
-version = "0.1.0"
 edition = "2021"
 
 

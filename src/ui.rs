@@ -30,7 +30,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .title_alignment(ratatui::layout::Alignment::Right);
 
     let info_text = Paragraph::new(
-        Text::from("Thank you for using Tasks!")
+        Text::from("Thank you for using Tasks-cli!")
             .bold()
             .style(Style::default()),
     )
@@ -130,9 +130,9 @@ pub fn render(app: &mut App, frame: &mut Frame) {
     frame.render_stateful_widget(list, content_chunk[0], &mut app.state);
 
     let nick = vec![
-        Span::styled(" 🦀 by ", Style::default()),
-        Span::styled("N37CR347UR3 |", Style::default()),
-        Span::styled(format!(" {} ", env!("CARGO_PKG_LICENSE")), Style::default()),
+        Span::styled(" by ", Style::default()),
+        Span::styled("NetCreature 2025 |", Style::default()),
+        Span::styled(format!(" {} ", env!("CARGO_PKG_VERSION")), Style::default()),
     ];
 
     if let CurrentScreen::Help = app.current_screen {

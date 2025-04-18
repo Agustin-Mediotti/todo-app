@@ -445,7 +445,7 @@ dependencies = [
 
 [[package]]
 name = "model"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "dirs",
  "serde",
@@ -861,7 +861,7 @@ dependencies = [
 
 [[package]]
 name = "todo-app"
-version = "0.1.2-alpha"
+version = "0.1.4-alpha"
 dependencies = [
  "color-eyre",
  "crossterm",
